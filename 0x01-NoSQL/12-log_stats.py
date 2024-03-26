@@ -24,6 +24,7 @@ def log_stats():
 
     # Count the number of logs for each HTTP method
     methods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    print('Methods:')
     for method in methods:
         count = collection.count_documents({"method": method})
         print("\tmethod {}: {}".format(method, count))
