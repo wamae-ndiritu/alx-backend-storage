@@ -36,6 +36,36 @@ class Cache:
             return method(self, *args, **kwargs)
         return wrapper
 
+    @staticmethod
+    def call_history(method: Callable) -> Callable:
+        """
+        Decorator to store the history of inputs
+        and outputs for a particular function.
+
+        Args:
+            method (Callable): The method to be decorated.
+
+        Returns:
+            Callable: The decorated method.
+        """
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            inputs_key = "{}:inputs".format(method.__qualname__)
+            outputs_key = "{}:outputs".format(method.__qualname__)
+
+            # Store input parameters
+            self._redis.rpush(inputs_key, str(args))
+
+            # Execute the wrapped function to retrieve the output
+            output = method(self, *args, **kwargs)
+
+            # Store the output
+            self._redis.rpush(outputs_key, output)
+
+            return output
+        return wrapper
+
+    @call_history
     @count_calls
     def store(self, data: Union[str, bytes, int, float]) -> str:
         """
@@ -45,8 +75,8 @@ class Cache:
         self._redis.set(key, data)
         return key
 
-    def get(self, key: str, fn: Callable = None) -> Union
-    [str, bytes, int, float, None]:
+    def get(self, key: str, fn: Callable = None) -> Union[
+            str, bytes, int, float, None]:
         """
         Retrieve data from the Redis cache.
 
