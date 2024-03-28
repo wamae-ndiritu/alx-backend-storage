@@ -4,7 +4,51 @@ Writing strings to Redis
 """
 import redis
 import uuid
+import functools
 from typing import Callable, Union
+
+
+def count_calls(method: Callable) -> Callable:
+    """
+    Decorator to count the number of times a method is called.
+
+    Args:
+        method (Callable): The method to be decorated.
+    Returns:
+        Callable: The decorated method.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        key = method.__qualname__
+        self._redis.incr(key)
+        return method(self, *args, **kwargs)
+    return wrapper
+
+
+def call_history(method: Callable) -> Callable:
+    """
+    Decorator to store the history of inputs
+    and outputs for a particular function.
+    Args:
+        method (Callable): The method to be decorated.
+    Returns:
+        Callable: The decorated method.
+    """
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        inputs_key = "{}:inputs".format(method.__qualname__)
+        outputs_key = "{}:outputs".format(method.__qualname__)
+        # Store input parameters
+        self._redis.rpush(inputs_key, str(args))
+
+        # Execute the wrapped function to retrieve the output
+        output = method(self, *args, **kwargs)
+
+        # Store the output
+        self._redis.rpush(outputs_key, output)
+
+        return output
+    return wrapper
 
 
 class Cache:
@@ -17,53 +61,6 @@ class Cache:
         """
         self._redis = redis.Redis()
         self._redis.flushdb()
-
-    @staticmethod
-    def count_calls(method: Callable) -> Callable:
-        """
-        Decorator to count the number of times a method is called.
-
-        Args:
-            method (Callable): The method to be decorated.
-
-        Returns:
-            Callable: The decorated method.
-        """
-        @functools.wraps(method)
-        def wrapper(self, *args, **kwargs):
-            key = method.__qualname__
-            self._redis.incr(key)
-            return method(self, *args, **kwargs)
-        return wrapper
-
-    @staticmethod
-    def call_history(method: Callable) -> Callable:
-        """
-        Decorator to store the history of inputs
-        and outputs for a particular function.
-
-        Args:
-            method (Callable): The method to be decorated.
-
-        Returns:
-            Callable: The decorated method.
-        """
-        @functools.wraps(method)
-        def wrapper(self, *args, **kwargs):
-            inputs_key = "{}:inputs".format(method.__qualname__)
-            outputs_key = "{}:outputs".format(method.__qualname__)
-
-            # Store input parameters
-            self._redis.rpush(inputs_key, str(args))
-
-            # Execute the wrapped function to retrieve the output
-            output = method(self, *args, **kwargs)
-
-            # Store the output
-            self._redis.rpush(outputs_key, output)
-
-            return output
-        return wrapper
 
     @call_history
     @count_calls
@@ -134,7 +131,7 @@ def replay(func: Callable):
     cache = Cache()
     inputs = cache._redis.lrange("{}:inputs".format(func.__qualname__), 0, -1)
     outputs = cache._redis.lrange("{}:outputs".format(
-                                  func.__qualname__), 0, -1)
+        func.__qualname__), 0, -1)
     print(f"{func.__qualname__} was called {len(inputs)} times:")
     for inp, out in zip(inputs, outputs):
         print(f"{func.__qualname__}{eval(inp.decode())} -> {out.decode()}")
