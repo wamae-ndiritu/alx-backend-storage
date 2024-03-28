@@ -122,3 +122,19 @@ class Cache:
             or None if the key does not exist.
         """
         return self.get(key, fn=lambda d: int(d))
+
+
+def replay(func: Callable):
+    """
+    Display the history of calls of a particular function.
+
+    Args:
+        func (Callable): The function to replay.
+    """
+    cache = Cache()
+    inputs = cache._redis.lrange("{}:inputs".format(func.__qualname__), 0, -1)
+    outputs = cache._redis.lrange("{}:outputs".format(
+                                  func.__qualname__), 0, -1)
+    print(f"{func.__qualname__} was called {len(inputs)} times:")
+    for inp, out in zip(inputs, outputs):
+        print(f"{func.__qualname__}{eval(inp.decode())} -> {out.decode()}")
