@@ -18,6 +18,25 @@ class Cache:
         self._redis = redis.Redis()
         self._redis.flushdb()
 
+    @staticmethod
+    def count_calls(method: Callable) -> Callable:
+        """
+        Decorator to count the number of times a method is called.
+
+        Args:
+            method (Callable): The method to be decorated.
+
+        Returns:
+            Callable: The decorated method.
+        """
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            key = method.__qualname__
+            self._redis.incr(key)
+            return method(self, *args, **kwargs)
+        return wrapper
+
+    @count_calls
     def store(self, data: Union[str, bytes, int, float]) -> str:
         """
         Store the data inside the redis attribute
